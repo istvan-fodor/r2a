@@ -7,7 +7,7 @@ homepage = "https://github.com/istvan-fodor/r2a"
 repository = "https://github.com/istvan-fodor/r2a"
 license = "Apache-2.0"
 readme = "README.md"
-keywords = ["ROS", "ROS 2", "Humble", "Jazzy", "Arrow"]
+keywords = ["ROS", "ROS2", "Humble", "Jazzy", "Arrow"]
 
 [features]
 doc-only = []
