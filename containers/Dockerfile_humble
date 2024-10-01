@@ -8,3 +8,6 @@ RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | bash -s -- -y
 RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
 
 COPY . /r2a
+WORKDIR /r2a
+
+ENTRYPOINT [ "/containers/entrypoint.sh" ]

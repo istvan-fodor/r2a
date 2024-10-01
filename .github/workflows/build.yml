@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - run: docker pull . --file ./containers/Dockerfile_doc_only --tag doc_only
+    - run: docker build . --file ./containers/Dockerfile_doc_only --tag doc_only
     - run: docker run doc_only cargo build --features doc-only --no-default-features
 
   humble_build:
