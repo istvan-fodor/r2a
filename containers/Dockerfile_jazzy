@@ -10,4 +10,4 @@ RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
 COPY . /r2a
 WORKDIR /r2a
 
-ENTRYPOINT [ "/r2r/containers/entrypoint.sh" ]
+ENTRYPOINT [ "/r2a/containers/entrypoint.sh" ]
