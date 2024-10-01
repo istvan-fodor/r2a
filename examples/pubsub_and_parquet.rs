@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
 ///
 /// This subscriber will write the received LaserScan messages to parquet files in batches of 10.
 ///
-async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<(), r2r::Error> {
+async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<()> {
     let sub = arc_node
         .lock()
         .unwrap()
@@ -73,12 +73,17 @@ async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<(), r2r::Error> {
     sub.for_each(|msg| {
         count += 1;
 
-        row_builder.add_row(&msg);
+        match row_builder.add_row(&msg) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error adding row: {}", e);
+            }
+        }
 
         if count > 0 && count % 10 == 0 {
             let arrays = row_builder.to_arc_arrays();
             let schema = Schema::new(fields.clone());
-            let file_path = format!("build/laser_scan_{}.parquet", count / 10);
+            let file_path = format!("target/laser_scan_{}.parquet", count / 10);
             write_to_parquet(arrays, Arc::new(schema), &file_path).unwrap();
             println!("Wrote data to parquet file {}", file_path)
         }
@@ -91,7 +96,7 @@ async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<(), r2r::Error> {
 }
 
 /// This publisher publishes 30 LaserScan messages
-async fn publisher(arc_node: Arc<Mutex<r2r::Node>>) -> Result<(), r2r::Error> {
+async fn publisher(arc_node: Arc<Mutex<r2r::Node>>) -> Result<()> {
     let (mut timer, publisher) = {
         let mut node = arc_node.lock().unwrap();
         let timer = node.create_wall_timer(std::time::Duration::from_millis(10))?;
