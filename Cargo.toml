@@ -2,6 +2,11 @@
 name = "r2a"
 version = "0.1.0"
 edition = "2021"
+homepage = "https://github.com/istvan-fodor/r2r"
+repository = "https://github.com/istvan-fodor/r2r"
+license-file = "LICENSE"
+license = "Apache License 2.0"
+readme = "README.md"
 
 [dependencies]
 arrow-schema = ">=50"
