@@ -1,11 +1,11 @@
 [package]
 name = "r2a"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A Rust library provides a typesafe way to convert ROS2 messages into Apache Arrow format"
 homepage = "https://github.com/istvan-fodor/r2r"
 repository = "https://github.com/istvan-fodor/r2r"
-license-file = "LICENSE"
+license = "Apache-2.0"
 readme = "README.md"
 keywords = ["ROS", "ROS2", "Humble", "Jazzy", "Arrow"]
 
