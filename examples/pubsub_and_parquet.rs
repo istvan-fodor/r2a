@@ -2,16 +2,13 @@ use anyhow::Result;
 use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
-use futures::task::LocalSpawnExt;
-use futures::{executor::LocalPool, future, stream::StreamExt};
+use futures::StreamExt;
 use parquet::arrow::ArrowWriter;
-use parquet::file::properties::WriterProperties;
 use r2a::ArrowSupport;
 use r2a::RowBuilder;
 use r2r::sensor_msgs::msg::LaserScan;
 use r2r::QosProfile;
 use std::fs::File;
-use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use tokio::task;
 
