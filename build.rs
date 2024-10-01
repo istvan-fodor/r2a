@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use r2r_common::get_env_hash;
+
 
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -273,7 +273,6 @@ fn generate_imports() -> TokenStream {
 fn generate_arrow_imports() -> TokenStream {
     quote! {
         use arrow_schema::{DataType, Field, Fields, Schema};
-        use std::sync::Arc;
         use r2r::{WrappedTypesupport};
     }
 }
@@ -1546,8 +1545,15 @@ fn generate_arrow_rowbuilders(
     gen_function
 }
 
+#[cfg(feature = "doc-only")]
+fn main() -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(feature = "doc-only"))]
 fn main() -> Result<()> {
     // Parse the source code as a syn file
+    use r2r_common::get_env_hash;
     let out_dir = env::var("OUT_DIR").unwrap();
     let out_dir_path = Path::new(&out_dir);
 
@@ -1572,16 +1578,15 @@ fn main() -> Result<()> {
     let (structs_by_schema, structs_by_type) =
         find_structs_by_schema_and_type(deps_dir, env_hash.as_str(), &implementing_structs);
 
-    //let map_function = generate_map_function(&structs_by_schema);
+    //let map_function = generate_map_function(&structs_by_schema);s
     generate_schema(
         out_dir_path,
         &structs_by_schema,
-       // &structs_by_type,
+    // &structs_by_type,
         &mut log_file,
     )?;
 
     generate_arrow_mappers(out_dir, structs_by_schema, structs_by_type, &mut log_file)?;
-
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use arrow_array::builder::ArrayBuilder;
 use arrow_array::Array;
+use std::sync::Arc;
 
 /// The `RowBuilder` trait is implemented for each ROS2 message type by a code generator.
 /// It serves as an accumulator that collects records and converts them into a collection
@@ -152,6 +153,7 @@ pub trait ArrowSupport<'a> {
     fn arrow_schema() -> arrow_schema::Schema;
 }
 
+#[cfg(feature = "default")]
 include!(concat!(env!("OUT_DIR"), "/generated_arrow_mappers.rs"));
 
 #[cfg(test)]

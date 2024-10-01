@@ -1,6 +1,6 @@
 [package]
 name = "r2a"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "A Rust library that provides a typesafe way to convert ROS2 messages into Apache Arrow format"
 homepage = "https://github.com/istvan-fodor/r2a"
@@ -9,13 +9,17 @@ license = "Apache-2.0"
 readme = "README.md"
 keywords = ["ROS", "ROS2", "Humble", "Jazzy", "Arrow"]
 
+[features]
+doc-only = []
+default = ["r2r", "r2r_common"]
+
+
 [dependencies]
 arrow-schema = ">=50"
 arrow-array = ">=50"
-r2r = ">=0.9.0"
+r2r = { version = ">=0.9.0", optional = true }
 anyhow = ">=1"
 log = ">=0.4"
-
 
 [dev-dependencies]
 futures = "0.3"
@@ -25,11 +29,15 @@ rand = "0.8"
 
 [build-dependencies]
 walkdir = "2"
-r2r = ">=0.9.0"
-r2r_common = ">=0.9.0"
+r2r = { version = ">=0.9.0", optional = true }
+r2r_common = { version = ">=0.9.0", optional = true }
 anyhow = "1"
 proc-macro2 = "1.0.78"
 quote = "1.0.35"
 syn = { version = "2", features = ["full", "visit"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[package.metadata.docs.rs]
+no-default-features = true
+features = ["doc-only"]
