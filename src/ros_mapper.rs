@@ -158,8 +158,44 @@ include!(concat!(env!("OUT_DIR"), "/generated_arrow_mappers.rs"));
 
 #[cfg(test)]
 mod tests {
+    use super::ArrowSupport;
+    use super::RowBuilder;
+    use arrow_schema::Fields;
+    use r2r::builtin_interfaces::msg::Time;
+    use r2r::std_msgs::msg::Header;
 
-    fn test_append() {
-        // let row_builder =
+    #[test]
+    fn test_append_and_to_array() {
+        let mut v = Vec::with_capacity(100);
+        for _ in 0..100 {
+            v.push(Header {
+                stamp: Time { sec: 0, nanosec: 0 },
+                frame_id: "test_frame".to_string(),
+            });
+        }
+
+        let fields = Header::arrow_fields();
+        let fields = fields.iter().filter(|f| f.name() == "stamp").collect();
+
+        let mut row_builder = Header::new_row_builder(fields);
+        for msg in v.iter() {
+            assert!(row_builder.add_row(msg).is_ok());
+        }
+
+        let arrays = row_builder.to_arc_arrays();
+        assert_eq!(arrays.len(), 1);
+        assert_eq!(arrays[0].len(), 100);
+        assert_eq!(arrays[0].null_count(), 0);
+
+        let is_correct_struct = match arrays[0].data_type() {
+            arrow_schema::DataType::Struct(fields) => {
+                fields.len() == 2
+                    && fields.get(0).unwrap().name() == "sec"
+                    && fields.get(1).unwrap().name() == "nanosec"
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_struct);
     }
 }
