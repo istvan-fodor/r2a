@@ -160,7 +160,6 @@ include!(concat!(env!("OUT_DIR"), "/generated_arrow_mappers.rs"));
 mod tests {
     use super::ArrowSupport;
     use super::RowBuilder;
-    use arrow_schema::Fields;
     use r2r::builtin_interfaces::msg::Time;
     use r2r::std_msgs::msg::Header;
 
@@ -191,7 +190,9 @@ mod tests {
             arrow_schema::DataType::Struct(fields) => {
                 fields.len() == 2
                     && fields.get(0).unwrap().name() == "sec"
+                    && fields.get(0).unwrap().data_type() == &arrow_schema::DataType::Int32
                     && fields.get(1).unwrap().name() == "nanosec"
+                    && fields.get(1).unwrap().data_type() == &arrow_schema::DataType::UInt32
             }
             _ => false,
         };
