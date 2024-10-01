@@ -28,7 +28,7 @@ jobs:
     - run: docker build . --file ./containers/Dockerfile_humble --tag humble_build
     - run: docker run humble_build cargo test
   
-  humble_build:
+  jazzy_build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
