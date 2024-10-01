@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source $HOME/.bashrc
+. "$HOME/.cargo/env"
 
 if [ -e "/opt/ros/jazzy/setup.bash" ]; then
     source "/opt/ros/jazzy/setup.bash"
