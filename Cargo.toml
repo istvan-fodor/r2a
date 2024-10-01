@@ -7,6 +7,7 @@ repository = "https://github.com/istvan-fodor/r2r"
 license-file = "LICENSE"
 license = "Apache License 2.0"
 readme = "README.md"
+keywords = ["ROS", "ROS2", "Humble", "Jazzy", "Arrow"]
 
 [dependencies]
 arrow-schema = ">=50"
