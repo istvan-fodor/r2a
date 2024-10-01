@@ -6,7 +6,8 @@ The library is essentially a wrapper on top of the amazing [R2R](https://github.
 This build was mainly tested with ROS 2 Humble. I also tested it with Jazzy locally (by switching to the master branch `r2r`).
 
 Documentation can be found on docs.rs: https://docs.rs/r2a/latest/r2a/
-Crates.io homepage is here: https://crates.io/crates/r2a 
+
+The crate can be found on crates.io: https://crates.io/crates/r2a 
 
 ## Install
 
