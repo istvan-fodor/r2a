@@ -13,14 +13,14 @@ use std::sync::{Arc, Mutex};
 use tokio::task;
 
 /// This example demonstrates the use of the `r2a::ArrowSupport` and `r2a::RowBuilder`
-/// structs to handle ROS2 messages and convert them to Apache Arrow format
+/// structs to handle ROS 2 messages and convert them to Apache Arrow format
 /// for columnar data storage. The `RowBuilder` provides an easy-to-use interface
-/// to batch ROS2 LaserScan messages and transform them into Arrow-compatible arrays,
+/// to batch ROS 2 LaserScan messages and transform them into Arrow-compatible arrays,
 /// which are then written to Parquet files. The `ArrowSupport` trait simplifies the process
-/// of defining Arrow schemas for ROS2 message types.
+/// of defining Arrow schemas for ROS 2 message types.
 ///
 /// In this example, the subscriber receives LaserScan messages, batches them in groups of 10,
-/// and saves each batch to a Parquet file, showcasing how to integrate ROS2 data streams
+/// and saves each batch to a Parquet file, showcasing how to integrate ROS 2 data streams
 /// with the Arrow ecosystem for scalable data processing.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         let mut i = 1;
         loop {
             {
-                // Spin the ROS2 node for processing subscriptions and publications.
+                // Spin the ROS 2 node for processing subscriptions and publications.
                 an_spin
                     .lock()
                     .unwrap()

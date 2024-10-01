@@ -1,13 +1,14 @@
-R2A - A Rust library that provides a typesafe way to convert ROS2 messages into Apache Arrow format
+R2A - A Rust library that provides a typesafe way to convert ROS 2 messages into Apache Arrow format
 =================================================================================================
 
 The library is essentially a wrapper on top of the amazing [R2R](https://github.com/sequenceplanner/r2r/) library. The two main components are `r2a::ArrowSupport` and `r2a::RowBuilder`. 
 
-This build was mainly tested with ROS2 Humble. I also tested it with Jazzy locally (by switching to the master branch `r2r`) 
+This build was mainly tested with ROS 2 Humble. I also tested it with Jazzy locally (by switching to the master branch `r2r`) 
 
 ## Install
 
-`cargo add r2a`
+1. `cargo add r2a`
+2. Make sure to source your ROS 2 environment before you build your project. 
 
 ## Examples
 

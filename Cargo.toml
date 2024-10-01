@@ -1,13 +1,13 @@
 [package]
 name = "r2a"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
-description = "A Rust library that provides a typesafe way to convert ROS2 messages into Apache Arrow format"
+description = "A Rust library that provides a typesafe way to convert ROS 2 messages into Apache Arrow format"
 homepage = "https://github.com/istvan-fodor/r2a"
 repository = "https://github.com/istvan-fodor/r2a"
 license = "Apache-2.0"
 readme = "README.md"
-keywords = ["ROS", "ROS2", "Humble", "Jazzy", "Arrow"]
+keywords = ["ROS", "ROS 2", "Humble", "Jazzy", "Arrow"]
 
 [features]
 doc-only = []

@@ -15,12 +15,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
-//! # R2A: Arrow bindings to ROS2
+//! # R2A: Arrow bindings to ROS 2
 //!
 //! This library provides utilities for mapping ROS messages to Arrow arrays. It heavily relies
 //! on the [r2r](https://github.com/sequenceplanner/r2r) library. Much like how `r2r` works,
 //! `r2a` RowBuilder and ArrowSupport implementations are automatically generated during build
-//! time and includes in the compilation. Before build, you must source your ROS2 environment.
+//! time and includes in the compilation. Before build, you must source your ROS 2 environment.
 //!
 //!
 //! ## Features

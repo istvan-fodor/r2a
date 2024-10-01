@@ -3,7 +3,7 @@ use arrow_array::builder::ArrayBuilder;
 use arrow_array::Array;
 use std::sync::Arc;
 
-/// The `RowBuilder` trait is implemented for each ROS2 message type by a code generator.
+/// The `RowBuilder` trait is implemented for each ROS 2 message type by a code generator.
 /// It serves as an accumulator that collects records and converts them into a collection
 /// of Arrow arrays. This trait is responsible for managing how records are added and stored
 /// and how they are converted into Arrow-compatible data structures.
@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// # Type Parameters
 ///
 /// - `'a`: The lifetime of the references to the message and fields.
-/// - `T`: The specific ROS2 message type that the row builder will accumulate.
+/// - `T`: The specific ROS 2 message type that the row builder will accumulate.
 ///
 /// # Example
 ///
@@ -33,7 +33,7 @@ use std::sync::Arc;
 /// let arrow_arrays = row_builder.to_arc_arrays();
 /// ```
 pub trait RowBuilder<'a, T> {
-    /// Adds a ROS2 message of type `T` to the row builder.
+    /// Adds a ROS 2 message of type `T` to the row builder.
     ///
     /// This method takes a reference to the message, processes it, and stores the data
     /// internally in Arrow array builders that can later be converted to Arrow arrays.
@@ -73,18 +73,18 @@ pub trait RowBuilder<'a, T> {
     fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>>;
 }
 
-/// The `ArrowSupport` trait is implemented for each ROS2 message type, allowing the creation of
+/// The `ArrowSupport` trait is implemented for each ROS 2 message type, allowing the creation of
 /// row builders, Arrow schemas, and field definitions for that message type.
 ///
 /// # Associated Types
 ///
 /// - `RowBuilderType`: The type of row builder that will be used to accumulate data for the
-///   implementing ROS2 message type.
+///   implementing ROS 2 message type.
 ///
 /// # Example
 ///
 /// ```
-/// // Assuming a type `MyRos2Message` implements `ArrowSupport`.
+/// // Assuming a type `MyROS 2Message` implements `ArrowSupport`.
 /// use r2a::ArrowSupport;
 ///
 /// let arrow_fields = r2r::std_msgs::msg::Header::arrow_fields();
@@ -99,11 +99,11 @@ pub trait RowBuilder<'a, T> {
 ///
 /// ```
 pub trait ArrowSupport<'a> {
-    /// The type of row builder that this ROS2 message type will use to accumulate rows.
-    /// This type is specific to the ROS2 message type that implements the `ArrowSupport` trait.
+    /// The type of row builder that this ROS 2 message type will use to accumulate rows.
+    /// This type is specific to the ROS 2 message type that implements the `ArrowSupport` trait.
     type RowBuilderType;
 
-    /// Creates a new row builder for the given ROS2 message type.
+    /// Creates a new row builder for the given ROS 2 message type.
     ///
     /// This method creates a row builder using the provided Arrow field definitions. The row
     /// builder is then used to accumulate data for conversion to Arrow arrays.
@@ -111,18 +111,18 @@ pub trait ArrowSupport<'a> {
     /// # Arguments
     ///
     /// * `arrow_fields` - A vector of references to Arrow field definitions that specify the
-    ///   structure of the data for this ROS2 message type. This has to be a subset of fields
+    ///   structure of the data for this ROS 2 message type. This has to be a subset of fields
     ///   returned by the `arrow_fields` method.
     ///
     /// # Returns
     ///
     /// A row builder of type `RowBuilderType`, which can be used to accumulate rows for the
-    /// implementing ROS2 message type.
+    /// implementing ROS 2 message type.
     fn new_row_builder(arrow_fields: Vec<&'a arrow_schema::Field>) -> Self::RowBuilderType;
 
-    /// Returns the Arrow field definitions for this ROS2 message type.
+    /// Returns the Arrow field definitions for this ROS 2 message type.
     ///
-    /// This method returns the Arrow field definitions that describe the structure of the ROS2
+    /// This method returns the Arrow field definitions that describe the structure of the ROS 2
     /// message type, including an optional field that containse the whole message as an Arrow Struct.
     ///
     /// # Arguments
@@ -131,13 +131,13 @@ pub trait ArrowSupport<'a> {
     ///
     /// # Returns
     ///
-    /// A vector of Arrow field definitions (`arrow_schema::Field`) for the implementing ROS2
+    /// A vector of Arrow field definitions (`arrow_schema::Field`) for the implementing ROS 2
     /// message type.
     fn arrow_fields() -> Vec<arrow_schema::Field>;
 
-    /// Returns the Arrow schema for this ROS2 message type.
+    /// Returns the Arrow schema for this ROS 2 message type.
     ///
-    /// This method generates the complete Arrow schema for the ROS2 message type, which can be
+    /// This method generates the complete Arrow schema for the ROS 2 message type, which can be
     /// used when creating Arrow arrays or converting the data to other formats like Parquet.
     ///
     ///
@@ -148,7 +148,7 @@ pub trait ArrowSupport<'a> {
     ///
     /// # Returns
     ///
-    /// An Arrow schema (`arrow_schema::Schema`) that represents the full structure of the ROS2
+    /// An Arrow schema (`arrow_schema::Schema`) that represents the full structure of the ROS 2
     /// message type.
     fn arrow_schema() -> arrow_schema::Schema;
 }
