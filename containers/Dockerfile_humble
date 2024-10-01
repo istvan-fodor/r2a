@@ -1,0 +1,10 @@
+FROM ros:humble
+
+RUN apt-get update
+RUN apt-get install -y build-essential curl libclang-dev
+RUN apt-get install -y ros-humble-test-msgs ros-humble-example-interfaces
+
+RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | bash -s -- -y
+RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+
+COPY . /r2a

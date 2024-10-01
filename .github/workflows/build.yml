@@ -1,0 +1,29 @@
+
+name: R2A CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: [ "main" ]
+  merge_group:
+    types: [checks_requested]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  docs_only:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: docker pull . --file ./containers/Dockerfile_doc_only --tag doc_only
+    - run: docker run doc_only cargo build --features doc-only --no-default-features
+
+  humble_build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: docker build . --file ./containers/Dockerfile_humble --tag humble_build
+    - run: docker run humble_build cargo test
