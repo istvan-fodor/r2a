@@ -24,6 +24,7 @@ use tokio::task;
 /// with the Arrow ecosystem for scalable data processing.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    unsafe { backtrace_on_stack_overflow::enable() };
     let ctx = r2r::Context::create()?;
     let node = r2r::Node::create(ctx, "testnode", "")?;
     let arc_node = Arc::new(Mutex::new(node));
@@ -67,8 +68,12 @@ async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<()> {
         .unwrap()
         .subscribe::<LaserScan>("/laser_scan", QosProfile::default())?;
 
-    let fields = LaserScan::arrow_fields();
+    let fields = LaserScan::arrow_fields(true);
     let mut row_builder = LaserScan::new_row_builder(fields.iter().collect());
+
+    let flat_fields = LaserScan::flat_arrow_fields(true);
+    let mut flat_row_builder = LaserScan::new_flat_row_builder(flat_fields.iter().collect());
+
     let mut count = 0;
     sub.for_each(|msg| {
         count += 1;
@@ -76,7 +81,14 @@ async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<()> {
         match row_builder.add_row(&msg) {
             Ok(_) => {}
             Err(e) => {
-                panic!("Error adding row: {}", e);
+                panic!("Error adding row to row_builder: {}", e);
+            }
+        }
+
+        match flat_row_builder.add_row(&msg) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error adding row to flat_row_builder: {}", e);
             }
         }
 
@@ -85,7 +97,16 @@ async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<()> {
             let schema = Schema::new(fields.clone());
             let file_path = format!("target/laser_scan_{}.parquet", count / 10);
             write_to_parquet(arrays, Arc::new(schema), &file_path).unwrap();
-            println!("Wrote data to parquet file {}", file_path)
+
+            println!("Wrote data to parquet file {}", file_path);
+
+            let arrays = flat_row_builder.to_arc_arrays();
+
+            let schema = Schema::new(flat_fields.clone());
+            let file_path = format!("target/laser_scan_flat_{}.parquet", count / 10);
+            write_to_parquet(arrays, Arc::new(schema), &file_path).unwrap();
+
+            println!("Wrote flat data to parquet file {}", file_path);
         }
 
         futures::future::ready(())

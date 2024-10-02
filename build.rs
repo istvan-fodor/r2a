@@ -1,7 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
@@ -96,11 +95,11 @@ impl<'a> TraitImplVisitor<'a> {
 
 impl<'a> Visit<'a> for TraitImplVisitor<'a> {
     fn visit_item_mod(&mut self, i: &'a ItemMod) {
-        self.module_stack.push(i.ident.to_string()); 
+        self.module_stack.push(i.ident.to_string());
 
         syn::visit::visit_item_mod(self, i);
 
-        self.module_stack.pop(); 
+        self.module_stack.pop();
     }
 
     fn visit_item_impl(&mut self, i: &'a ItemImpl) {
@@ -124,15 +123,14 @@ impl<'a> Visit<'a> for TraitImplVisitor<'a> {
 }
 impl<'a> Visit<'a> for StructVisitor<'a> {
     fn visit_item_mod(&mut self, i: &'a ItemMod) {
-        self.module_stack.push(i.ident.to_string()); 
+        self.module_stack.push(i.ident.to_string());
 
         syn::visit::visit_item_mod(self, i);
 
-        self.module_stack.pop(); 
+        self.module_stack.pop();
     }
 
     fn visit_item_struct(&mut self, i: &'a ItemStruct) {
-
         println!("Found struct: {}", i.ident);
 
         let mut package_name = "".to_string();
@@ -362,12 +360,11 @@ fn generate_arrow_schema_fields(
                 let typ = format!("r2r::{}", typ);
                 let field_struct = structs_by_type.get(&typ).unwrap();
 
-                let type_underscore_name =
-                    create_name_identity(&field_struct.packaged_name, "_Schema");
+                let schema_fn = create_name_identity(&field_struct.packaged_name, "_Schema");
 
                 let nullable = true;
                 vec![quote!(
-                    Field::new(#field_name, DataType::Struct(Fields::from(#type_underscore_name())), #nullable)
+                    Field::new(#field_name, DataType::Struct(Fields::from(#schema_fn(false))), #nullable)
                 )]
             }
             typ if flat && !typ.starts_with("Vec") => {
@@ -392,18 +389,17 @@ fn generate_arrow_schema_fields(
 
                 let suffix = if flat { "_FlatSchema" } else { "_Schema" };
 
-                let type_underscore_name =
-                    create_name_identity(&field_struct.packaged_name, suffix);
+                let schema_fn = create_name_identity(&field_struct.packaged_name, suffix);
 
                 let nullable = true;
 
                 if flat {
                     vec![quote!(
-                        Field::new(#field_name, DataType::LargeList(Arc::new(Field::new("item", DataType::Struct(Fields::from(#type_underscore_name(false))), #nullable))), #nullable)
+                        Field::new(#field_name, DataType::LargeList(Arc::new(Field::new("item", DataType::Struct(Fields::from(#schema_fn(false))), #nullable))), #nullable)
                     )]
                 } else {
                     vec![quote!(
-                        Field::new(#field_name, DataType::LargeList(Arc::new(Field::new("item", DataType::Struct(Fields::from(#type_underscore_name())), #nullable))), #nullable)
+                        Field::new(#field_name, DataType::LargeList(Arc::new(Field::new("item", DataType::Struct(Fields::from(#schema_fn(false))), #nullable))), #nullable)
                     )]
                 }
             }
@@ -434,7 +430,7 @@ fn generate_flat_arrow_schema(
             );
 
             let fn_call = quote!(
-                #schema_name => #type_underscore_name_schema(true),
+                #schema_name => #type_underscore_name_schema(include_self_struct),
             );
 
             let schema_fn = quote!(
@@ -442,7 +438,7 @@ fn generate_flat_arrow_schema(
                 pub fn #type_underscore_name_schema(include_self_struct: bool) -> Vec<Field> {
                     let mut schema = vec![#(#fields),*];
                     if include_self_struct {
-                        schema.push(Field::new_struct("message_struct", #type_underscore_name_schema_struct(), true))
+                        schema.push(Field::new_struct("message_struct", #type_underscore_name_schema_struct(false), true))
                     }
                     schema
                 }
@@ -455,10 +451,10 @@ fn generate_flat_arrow_schema(
     let gen_function = quote! {
 
         #[allow(dead_code)]
-        pub(crate) fn map_ros_schema_to_flat_arrow_fields(ros_schema : &str) -> Vec<Field> {
+        pub(crate) fn map_ros_schema_to_flat_arrow_fields(ros_schema : &str, include_self_struct: bool) -> Vec<Field> {
             match ros_schema {
                 #(#schema_fn_call)*
-                unknown => {    
+                unknown => {
                     log::warn!("Unknown schema {}, using binary parser.", unknown);
                     vec![Field::new("binary_data", DataType::LargeBinary, true)]
                 }
@@ -493,13 +489,17 @@ fn generate_arrow_schema(
             );
 
             let fn_call = quote!(
-                #schema_name => #type_underscore_name_schema(),
+                #schema_name => #type_underscore_name_schema(include_self_struct),
             );
 
             let schema_fn = quote!(
                 #[allow(non_snake_case)]
-                pub fn #type_underscore_name_schema() -> Vec<Field> {
-                    vec![#(#fields),*]
+                pub fn #type_underscore_name_schema(include_self_struct: bool) -> Vec<Field> {
+                    let mut schema = vec![#(#fields),*];
+                    if include_self_struct {
+                        schema.push(Field::new_struct("message_struct", #type_underscore_name_schema(false), true))
+                    }
+                    schema
                 }
             );
 
@@ -510,7 +510,7 @@ fn generate_arrow_schema(
     let gen_function = quote! {
 
         #[allow(dead_code)]
-        pub(crate) fn map_ros_schema_to_arrow_fields(ros_schema : &str) -> Vec<Field> {
+        pub(crate) fn map_ros_schema_to_arrow_fields(ros_schema : &str, include_self_struct: bool) -> Vec<Field> {
             match ros_schema {
                 #(#schema_fn_call)*
                 unknown => {
@@ -560,8 +560,7 @@ fn rust_field_to_arrow_type_safe_token_stream(
                     create_name_identity(underlying_type_name_str.as_str(), struct_builder_suffix);
 
                 let builder_type = quote!(arrow_array::builder::StructBuilder);
-                let builder_instantiation =
-                    quote!(arrow_array::builder::StructBuilder::from_fields(#type_schema_fn_ident(), 0));
+                let builder_instantiation = quote!(arrow_array::builder::StructBuilder::from_fields(#type_schema_fn_ident(false), 0));
                 let builder_append = quote!(
                     let mut struct_builder = self.#builder_field_name.as_mut().unwrap();
                     #type_struct_builder_fn_ident(&msg.#path_field_name, struct_builder);
@@ -590,10 +589,11 @@ fn rust_field_to_arrow_type_safe_token_stream(
                     struct_builder_suffix,
                 );
 
-                let builder_type =
-                    quote!(arrow_array::builder::LargeListBuilder<arrow_array::builder::StructBuilder>);
+                let builder_type = quote!(
+                    arrow_array::builder::LargeListBuilder<arrow_array::builder::StructBuilder>
+                );
                 let builder_instantiation = quote!(arrow_array::builder::LargeListBuilder::new(
-                    arrow_array::builder::StructBuilder::from_fields(#type_schema_fn_ident(), 0)
+                    arrow_array::builder::StructBuilder::from_fields(#type_schema_fn_ident(false), 0)
                 ));
                 let builder_append = quote!(
                     let mut struct_builder = self.#builder_field_name.as_mut().unwrap().values();
@@ -666,7 +666,7 @@ fn rust_field_to_arrow_type_safe_token_stream(
 fn primitive_vector_builder_components(
     typ: &str,
     path_field_name: &syn::Expr,
-    flat: bool,
+    _flat: bool,
     builder_field_name: &Ident,
     index: &mut usize,
 ) -> (TokenStream, TokenStream, TokenStream, TokenStream) {
@@ -762,7 +762,6 @@ fn primitive_vector_builder_components(
         )
     } else {
         wrap_primitive_vector_builder_components(
-            flat,
             builder_item_type,
             builder_item_instantiation,
             builder_field_name,
@@ -774,7 +773,6 @@ fn primitive_vector_builder_components(
 }
 
 fn wrap_primitive_vector_builder_components(
-    flat: bool,
     builder_item_type: TokenStream,
     builder_item_instantiation: TokenStream,
     builder_field_name: &Ident,
@@ -782,36 +780,21 @@ fn wrap_primitive_vector_builder_components(
     index: &mut usize,
     path_field_name: &syn::Expr,
 ) -> (TokenStream, TokenStream, TokenStream, TokenStream) {
-    if flat {
-        (
-            quote!(arrow_array::builder::LargeListBuilder<#builder_item_type>),
-            quote!(arrow_array::builder::LargeListBuilder::new(#builder_item_instantiation)),
-            quote!(self.#builder_field_name.as_mut().unwrap().append_value(#builder_append)),
-            quote!(builder
-                    .field_builder::<arrow_array::builder::LargeListBuilder<#builder_item_type>>(#index)
-                    .as_mut()
-                    .unwrap()
-                    .append_value(#builder_append);
-            ),
-        )
-    } else {
-        (
-            quote!(arrow_array::builder::LargeListBuilder<#builder_item_type>),
-            quote!(arrow_array::builder::LargeListBuilder::new(#builder_item_instantiation)),
-            quote!(self.#builder_field_name.as_mut().unwrap().append_value(#builder_append)),
-            quote!(
-                {
-                  let mut list_builder_option = builder.field_builder::<arrow_array::builder::LargeListBuilder<Box<dyn arrow_array::builder::ArrayBuilder>>>(#index);
-                  let mut list_builder = list_builder_option.as_mut().unwrap();
-                  let value_builder = list_builder.values().as_any_mut().downcast_mut::<#builder_item_type>().unwrap();
-                  for value in msg.#path_field_name.iter() {
-                    value_builder.append_value(value.clone());
-                  }
-                  list_builder.append(true);
-                }
-            ),
-        )
-    }
+    (
+        quote!(arrow_array::builder::LargeListBuilder<#builder_item_type>),
+        quote!(arrow_array::builder::LargeListBuilder::new(#builder_item_instantiation)),
+        quote!(self.#builder_field_name.as_mut().unwrap().append_value(#builder_append)),
+        quote!({
+            let mut list_builder_option = builder.field_builder::<arrow_array::builder::LargeListBuilder<Box<dyn arrow_array::builder::ArrayBuilder>>>(#index);
+            let mut list_builder = list_builder_option.as_mut().unwrap();
+            let value_builder = list_builder.values().as_any_mut().downcast_mut::<#builder_item_type>().unwrap();
+            for value in msg.#path_field_name.iter() {
+              value_builder.append_value(value.clone());
+            }
+            list_builder.append(true);
+          }
+        ),
+    )
 }
 
 fn primitive_builder_components(
@@ -1061,8 +1044,7 @@ fn generate_arrow_schema_typesafe_parser_components(
     arrows_schema_fields
 }
 
-#[allow(dead_code)]
-fn generate_arrow_flat_rowbuilders(
+fn generate_arrow_rowbuilders(
     structs_by_schema: &BTreeMap<String, ROSStruct>,
     structs_by_type: &BTreeMap<String, ROSStruct>,
 ) -> TokenStream {
@@ -1072,210 +1054,108 @@ fn generate_arrow_flat_rowbuilders(
             let schema_name = &ros_struct.schema_name;
             let type_name_str = &ros_struct.packaged_name;
             let type_name: syn::Path = parse_str::<syn::Path>(type_name_str).unwrap();
+            let rowbuilder_trait = create_name_identity("RowBuilder", "");
             let type_underscore_name_str = create_name(&ros_struct.packaged_name, "_RowBuilder");
-            let type_underscore_name = create_name_identity( &type_underscore_name_str, "");
-            let flat_struct_builder_fn_ident = create_name_identity(&ros_struct.packaged_name, "_FlatStructBuilder");
-            let struct_builder_fn_ident = create_name_identity(&ros_struct.packaged_name, "_StructBuilder");
+            let type_underscore_name = create_name_identity(&type_underscore_name_str, "");
+            let struct_builder_fn_ident =
+                create_name_identity(&ros_struct.packaged_name, "_StructBuilder");
             let struct_schema_fn_ident = create_name_identity(&ros_struct.packaged_name, "_Schema");
-            let flat_schema_fn_ident = create_name_identity(&ros_struct.packaged_name, "_FlatSchema");
-   
-            
-            let fields = generate_arrow_schema_typesafe_parser_components(
-                schema_name,
-                structs_by_schema,
-                structs_by_type,
-                "",
-                "",
-                &mut 0,
-                true,
-            );
 
-            let struct_fields = generate_arrow_schema_typesafe_parser_components(
-                schema_name,
-                structs_by_schema,
-                structs_by_type,
-                "",
-                "",
-                &mut 0,
-                false,
-            );
-
+            let rowbuilder_trait_flat = create_name_identity("RowBuilder", "");
+            let type_underscore_name_flat_str =
+                create_name(&ros_struct.packaged_name, "_FlatRowBuilder");
+            let type_underscore_name_flat =
+                create_name_identity(&type_underscore_name_flat_str, "");
+            let struct_builder_fn_flat_ident =
+                create_name_identity(&ros_struct.packaged_name, "_FlatStructBuilder");
+            let schema_fn_flat_ident =
+                create_name_identity(&ros_struct.packaged_name, "_FlatSchema");
 
             let instantion = quote!(
                 #schema_name => Box::new(#type_underscore_name::new(fields)),
             );
 
-            let flat_struct_builder_appends: Vec<&TokenStream> =
-                fields.iter().map(|field| &field.struct_builder_append).collect(); 
+            let rowbuilder_tokens = generate_rowbuilder_tokens(
+                false,
+                schema_name,
+                structs_by_schema,
+                structs_by_type,
+                &type_underscore_name,
+                &type_name,
+                type_name_str,
+                &type_underscore_name_str,
+                &rowbuilder_trait,
+                &struct_schema_fn_ident,
+                &struct_builder_fn_ident,
+                &struct_builder_fn_ident,
+            );
 
-            let struct_builder_appends: Vec<&TokenStream> =
-                struct_fields.iter().map(|field| &field.struct_builder_append).collect(); 
+            let flat_rowbuilder_tokens = generate_rowbuilder_tokens(
+                true,
+                schema_name,
+                structs_by_schema,
+                structs_by_type,
+                &type_underscore_name_flat,
+                &type_name,
+                type_name_str,
+                &type_underscore_name_flat_str,
+                &rowbuilder_trait_flat,
+                &struct_schema_fn_ident,
+                &struct_builder_fn_flat_ident,
+                &struct_builder_fn_ident,
+            );
 
+            let arrow_support = quote! (
+                impl<'a> ArrowSupport<'a> for #type_name {
+                    type RowBuilderType = #type_underscore_name<'a>;
+                    type FlatRowBuilderType = #type_underscore_name_flat<'a>;
 
-            let builder_field_definitions: Vec<TokenStream> = fields
-                .iter()
-                .map(|field| {
-                    let builder_field_name = &field.builder_field_name;
-                    let builder_type = &field.builder_type;
-                    quote!(
-                        #builder_field_name: Option<#builder_type>,
+                    fn schema_name() -> &'static str{
+                        #schema_name
+                    }
 
-                    )
-                })
-                .collect();
+                    fn new_row_builder(arrow_fields: Vec<&'a Field>) -> Self::RowBuilderType {
+                        Self::RowBuilderType::new(arrow_fields)
+                    }
 
-            // builder_field_definitions.push(quote! {
-            //     message_struct: Option<arrow_array::StructBuilder>
-            // });
+                    fn new_flat_row_builder(arrow_fields: Vec<&'a Field>) -> Self::FlatRowBuilderType {
+                        Self::FlatRowBuilderType::new(arrow_fields)
+                    }
 
-            let builder_field_init: Vec<TokenStream> = fields
-                .iter()
-                .map(|field| {
-                    let builder_field_name = &field.builder_field_name;
-                    quote!(
-                        #builder_field_name: None,
+                    fn arrow_fields(include_self: bool) -> Vec<Field> {
+                        #struct_schema_fn_ident(include_self)
+                    }
 
-                    )
-                })
-                .collect();
-            // builder_field_init.push(quote! {
-            //     message_struct: None,
-            // });
+                    fn arrow_schema(include_self: bool) -> Schema {
+                        Schema::new(Self::arrow_fields(include_self))
+                    }
 
-            let builder_instantiation: Vec<&TokenStream> = fields
-                .iter()
-                .map(|field| &field.builder_instantiation)
-                .collect();
-            
-            // let self_struct_builder_instantiation = quote! {
-            //     message_struct: arrow_array::StructBuilder::from_fields(#schema_fn_ident(false)),
-            // };
-            // builder_instantiation.push(&self_struct_builder_instantiation);
+                    fn flat_arrow_fields(include_self: bool) -> Vec<Field> {
+                        #schema_fn_flat_ident(include_self)
+                    }
 
-            let builder_append: Vec<&TokenStream> =
-                fields.iter().map(|field| &field.builder_append).collect();
-            // let self_struct_builder_append = quote!{
-            //     "message_struct" => #struct_builder_fn_ident(&msg, &mut self.message_struct.as_mut().unwrap()),
-            // };
-            // builder_append.push(&self_struct_builder_append);
-
-            let builder_finish: Vec<&TokenStream> =
-                fields.iter().map(|field| &field.builder_finish).collect();
-            // let self_struct_builder_append = quote!{
-            //     "message_struct" => res.push(Arc::new(self.message_struct.as_mut().unwrap().finish())),
-            // };
-            // builder_finish.push(&self_struct_builder_append);
+                    fn flat_arrow_schema(include_self: bool) -> Schema {
+                        Schema::new(Self::flat_arrow_fields(include_self))
+                    }
+                }
+            );
 
             (
                 instantion,
                 quote!(
-                    
-                    impl<'a> ArrowSupport<'a> for #type_name {
-                        type RowBuilderType = #type_underscore_name<'a>;
 
-                        fn new_row_builder(arrow_fields: Vec<&'a Field>) -> Self::RowBuilderType {
-                            Self::RowBuilderType::new(arrow_fields)
-                        }
+                    #arrow_support
 
-                        fn arrow_fields(include_msg_struct: bool) -> Vec<Field> {
-                            #flat_schema_fn_ident(include_msg_struct)
-                        }
+                    // #[allow(non_snake_case,unused)]
+                    // pub fn #flat_struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
+                    //     #(#flat_struct_builder_appends)*
+                    //     builder.append(true);
+                    // }
 
-                        fn arrow_schema(include_msg_struct: bool) -> Schema {
-                            Schema::new(Self::arrow_fields(include_msg_struct))
-                        }
-                    }
+                    #rowbuilder_tokens
 
-                    #[allow(non_camel_case_types)]
-                    pub struct #type_underscore_name<'a> {
-                        _arrow_fields: Vec<&'a Field>,
-                        #(#builder_field_definitions)*
-                        message_struct: Option<arrow_array::builder::StructBuilder>,
-                        _phantom: std::marker::PhantomData<&'a ()>,
-                    }
+                    #flat_rowbuilder_tokens
 
-                    impl<'a> #type_underscore_name<'a> {
-
-                        pub fn deserialize(ser_msg : &[u8]) -> r2r::Result<#type_name> {
-                            log::trace!("Deserializing bytes to {} in {}", #type_name_str, #type_underscore_name_str);
-                            #type_name::from_serialized_bytes(ser_msg)
-                        }
-
-                        pub fn new(_arrow_fields: Vec<&'a Field>) -> Self {
-                            log::debug!("Instantiating parser for {}: {}::new", #type_name_str, #type_underscore_name_str);
-                            #[allow(unused_mut)]
-                            let mut this = Self {
-                                _arrow_fields,
-                                message_struct: None,
-                                #(#builder_field_init)*
-                                _phantom: std::marker::PhantomData,
-                            };
-
-                            #[allow(unused)]
-                            for field in &this._arrow_fields {
-                                match field.name().as_str() {
-                                    #(#builder_instantiation)*
-                                    "message_struct" => {
-                                        this.message_struct = Some(arrow_array::builder::StructBuilder::from_fields(#struct_schema_fn_ident(), 0)) 
-                                    },
-                                    other => log::error!("Invalid field name: {}", other)
-                                }
-                            }
-                            this
-                        }
-
-                    }
-
-                    impl<'a> RowBuilder<'a, #type_name> for #type_underscore_name<'a> {
-
-                        fn add_row(&mut self, msg : &#type_name) -> Result<()> {
-                            #[allow(unused)]
-                            for field in &self._arrow_fields {
-                                match field.name().as_str() {
-                                    #(#builder_append),*
-                                    "message_struct" => #struct_builder_fn_ident(&msg, &mut self.message_struct.as_mut().unwrap()),
-                                    other => log::error!("Invalid field name: {}", other)
-                                }
-                            }
-                            Ok(())
-                        }
-
-                        fn add_raw_row(&mut self, msg : &[u8]) -> Result<()> {
-                            log::debug!("Adding row in {}", #type_underscore_name_str);
-                            #[allow(unused)]
-                            let msg = Self::deserialize(msg)?;
-                            self.add_row(&msg)?;
-                            Ok(())
-                        }
-
-                        fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>> {
-                            log::debug!("Building batch in {}", #type_underscore_name_str);
-                            #[allow(unused_mut)]
-                            let mut res : Vec<Arc<dyn Array>> = vec![];
-
-                            #[allow(unused)]
-                            for field in &self._arrow_fields {
-                                match field.name().as_str() {
-                                    #(#builder_finish)*
-                                    "message_struct" => res.push(Arc::new(self.message_struct.as_mut().unwrap().finish())),
-                                    other => log::error!("Invalid field name: {}", other)
-                                }
-                            }
-                            res
-                        }
-                    }
-
-                    #[allow(non_snake_case,unused)]
-                    pub fn #flat_struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
-                        #(#flat_struct_builder_appends)*
-                        builder.append(true);
-                    }
-
-                    #[allow(non_snake_case,unused)]
-                    pub fn #struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
-                        #(#struct_builder_appends)*
-                        builder.append(true);
-                    }
                 ),
             )
         })
@@ -1303,246 +1183,166 @@ fn generate_arrow_flat_rowbuilders(
     gen_function
 }
 
-
-fn generate_arrow_rowbuilders(
+fn generate_rowbuilder_tokens(
+    flat: bool,
+    schema_name: &str,
     structs_by_schema: &BTreeMap<String, ROSStruct>,
     structs_by_type: &BTreeMap<String, ROSStruct>,
+    type_underscore_name: &Ident,
+    type_name: &syn::Path,
+    type_name_str: &String,
+    type_underscore_name_str: &str,
+    rowbuilder_trait: &Ident,
+    struct_schema_fn_ident: &Ident,
+    struct_builder_fn_ident: &Ident,
+    regular_struct_builder_fn_ident: &Ident,
 ) -> TokenStream {
-    let instantiation_and_row_appender: Vec<(TokenStream, TokenStream)> = structs_by_schema
-        .values()
-        .map(|ros_struct| {
-            let schema_name = &ros_struct.schema_name;
-            let type_name_str = &ros_struct.packaged_name;
-            let type_name: syn::Path = parse_str::<syn::Path>(type_name_str).unwrap();
-            let type_underscore_name_str = create_name(&ros_struct.packaged_name, "_RowBuilder");
-            let type_underscore_name = create_name_identity( &type_underscore_name_str, "");
-            let flat_struct_builder_fn_ident = create_name_identity(&ros_struct.packaged_name, "_FlatStructBuilder");
-            let struct_builder_fn_ident = create_name_identity(&ros_struct.packaged_name, "_StructBuilder");
-            let struct_schema_fn_ident = create_name_identity(&ros_struct.packaged_name, "_Schema");
-            //let flat_schema_fn_ident = create_name_identity(&ros_struct.packaged_name, "_FlatSchema");
-   
-            
-            let fields = generate_arrow_schema_typesafe_parser_components(
-                schema_name,
-                structs_by_schema,
-                structs_by_type,
-                "",
-                "",
-                &mut 0,
-                false,
-            );
+    let fields = generate_arrow_schema_typesafe_parser_components(
+        schema_name,
+        structs_by_schema,
+        structs_by_type,
+        "",
+        "",
+        &mut 0,
+        flat,
+    );
 
-            let struct_fields = generate_arrow_schema_typesafe_parser_components(
-                schema_name,
-                structs_by_schema,
-                structs_by_type,
-                "",
-                "",
-                &mut 0,
-                false,
-            );
+    let struct_fields = generate_arrow_schema_typesafe_parser_components(
+        schema_name,
+        structs_by_schema,
+        structs_by_type,
+        "",
+        "",
+        &mut 0,
+        flat,
+    );
 
+    let struct_builder_appends: Vec<&TokenStream> = struct_fields
+        .iter()
+        .map(|field| &field.struct_builder_append)
+        .collect();
 
-            let instantion = quote!(
-                #schema_name => Box::new(#type_underscore_name::new(fields)),
-            );
+    let builder_field_definitions: Vec<TokenStream> = fields
+        .iter()
+        .map(|field| {
+            let builder_field_name = &field.builder_field_name;
+            let builder_type = &field.builder_type;
+            quote!(
+                #builder_field_name: Option<#builder_type>,
 
-            let flat_struct_builder_appends: Vec<&TokenStream> =
-                fields.iter().map(|field| &field.struct_builder_append).collect(); 
-
-            let struct_builder_appends: Vec<&TokenStream> =
-                struct_fields.iter().map(|field| &field.struct_builder_append).collect(); 
-
-
-            let builder_field_definitions: Vec<TokenStream> = fields
-                .iter()
-                .map(|field| {
-                    let builder_field_name = &field.builder_field_name;
-                    let builder_type = &field.builder_type;
-                    quote!(
-                        #builder_field_name: Option<#builder_type>,
-
-                    )
-                })
-                .collect();
-
-            // builder_field_definitions.push(quote! {
-            //     message_struct: Option<arrow_array::StructBuilder>
-            // });
-
-            let builder_field_init: Vec<TokenStream> = fields
-                .iter()
-                .map(|field| {
-                    let builder_field_name = &field.builder_field_name;
-                    quote!(
-                        #builder_field_name: None,
-
-                    )
-                })
-                .collect();
-            // builder_field_init.push(quote! {
-            //     message_struct: None,
-            // });
-
-            let builder_instantiation: Vec<&TokenStream> = fields
-                .iter()
-                .map(|field| &field.builder_instantiation)
-                .collect();
-            
-            // let self_struct_builder_instantiation = quote! {
-            //     message_struct: arrow_array::StructBuilder::from_fields(#schema_fn_ident(false)),
-            // };
-            // builder_instantiation.push(&self_struct_builder_instantiation);
-
-            let builder_append: Vec<&TokenStream> =
-                fields.iter().map(|field| &field.builder_append).collect();
-            // let self_struct_builder_append = quote!{
-            //     "message_struct" => #struct_builder_fn_ident(&msg, &mut self.message_struct.as_mut().unwrap()),
-            // };
-            // builder_append.push(&self_struct_builder_append);
-
-            let builder_finish: Vec<&TokenStream> =
-                fields.iter().map(|field| &field.builder_finish).collect();
-            // let self_struct_builder_append = quote!{
-            //     "message_struct" => res.push(Arc::new(self.message_struct.as_mut().unwrap().finish())),
-            // };
-            // builder_finish.push(&self_struct_builder_append);
-
-            (
-                instantion,
-                quote!(
-                    
-                    impl<'a> ArrowSupport<'a> for #type_name {
-                        type RowBuilderType = #type_underscore_name<'a>;
-
-                        fn new_row_builder(arrow_fields: Vec<&'a Field>) -> Self::RowBuilderType {
-                            Self::RowBuilderType::new(arrow_fields)
-                        }
-
-                        fn arrow_fields() -> Vec<Field> {
-                            #struct_schema_fn_ident()
-                        }
-
-                        fn arrow_schema() -> Schema {
-                            Schema::new(Self::arrow_fields())
-                        }
-                    }
-
-                    #[allow(non_camel_case_types)]
-                    pub struct #type_underscore_name<'a> {
-                        _arrow_fields: Vec<&'a Field>,
-                        #(#builder_field_definitions)*
-                        message_struct: Option<arrow_array::builder::StructBuilder>,
-                        _phantom: std::marker::PhantomData<&'a ()>,
-                    }
-
-                    impl<'a> #type_underscore_name<'a> {
-
-                        pub fn deserialize(ser_msg : &[u8]) -> r2r::Result<#type_name> {
-                            log::trace!("Deserializing bytes to {} in {}", #type_name_str, #type_underscore_name_str);
-                            #type_name::from_serialized_bytes(ser_msg)
-                        }
-
-                        pub fn new(_arrow_fields: Vec<&'a Field>) -> Self {
-                            log::debug!("Instantiating parser for {}: {}::new", #type_name_str, #type_underscore_name_str);
-                            #[allow(unused_mut)]
-                            let mut this = Self {
-                                _arrow_fields,
-                                message_struct: None,
-                                #(#builder_field_init)*
-                                _phantom: std::marker::PhantomData,
-                            };
-
-                            #[allow(unused)]
-                            for field in &this._arrow_fields {
-                                match field.name().as_str() {
-                                    #(#builder_instantiation)*
-                                    "message_struct" => {
-                                        this.message_struct = Some(arrow_array::builder::StructBuilder::from_fields(#struct_schema_fn_ident(), 0)) 
-                                    },
-                                    other => log::error!("Invalid field name: {}", other)
-                                }
-                            }
-                            this
-                        }
-
-                    }
-
-                    impl<'a> RowBuilder<'a, #type_name> for #type_underscore_name<'a> {
-
-                        fn add_row(&mut self, msg : &#type_name) -> Result<()> {
-                            #[allow(unused)]
-                            for field in &self._arrow_fields {
-                                match field.name().as_str() {
-                                    #(#builder_append),*
-                                    "message_struct" => #struct_builder_fn_ident(&msg, &mut self.message_struct.as_mut().unwrap()),
-                                    other => log::error!("Invalid field name: {}", other)
-                                }
-                            }
-                            Ok(())
-                        }
-
-                        fn add_raw_row(&mut self, msg : &[u8]) -> Result<()> {
-                            log::debug!("Adding row in {}", #type_underscore_name_str);
-                            #[allow(unused)]
-                            let msg = Self::deserialize(msg)?;
-                            self.add_row(&msg)?;
-                            Ok(())
-                        }
-
-                        fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>> {
-                            log::debug!("Building batch in {}", #type_underscore_name_str);
-                            #[allow(unused_mut)]
-                            let mut res : Vec<Arc<dyn Array>> = vec![];
-
-                            #[allow(unused)]
-                            for field in &self._arrow_fields {
-                                match field.name().as_str() {
-                                    #(#builder_finish)*
-                                    "message_struct" => res.push(Arc::new(self.message_struct.as_mut().unwrap().finish())),
-                                    other => log::error!("Invalid field name: {}", other)
-                                }
-                            }
-                            res
-                        }
-                    }
-
-                    #[allow(non_snake_case,unused)]
-                    pub fn #flat_struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
-                        #(#flat_struct_builder_appends)*
-                        builder.append(true);
-                    }
-
-                    #[allow(non_snake_case,unused)]
-                    pub fn #struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
-                        #(#struct_builder_appends)*
-                        builder.append(true);
-                    }
-                ),
             )
         })
         .collect();
 
-    let (_, row_appenders): (Vec<TokenStream>, Vec<TokenStream>) =
-        instantiation_and_row_appender.into_iter().unzip();
+    let builder_field_init: Vec<TokenStream> = fields
+        .iter()
+        .map(|field| {
+            let builder_field_name = &field.builder_field_name;
+            quote!(
+                #builder_field_name: None,
 
-    let gen_function = quote! {
+            )
+        })
+        .collect();
 
-        // pub(crate) fn new_row_builder_for_schema<'a>(ros_schema : &str, fields: Vec<&'a Field>) -> Box<dyn RowBuilder<'a, T> + 'a> {
-        //     match ros_schema {
-        //         #(#instantiations)*
-        //         unsupported_schema => {
-        //             log::warn!("Unsupported schema: {}", unsupported_schema);
-        //             panic!("Unsupported schema: {}", unsupported_schema);
-        //             //Box::new(RawMessageRowBuilder::new(fields))
-        //         },
-        //     }
-        // }
+    let builder_instantiation: Vec<&TokenStream> = fields
+        .iter()
+        .map(|field| &field.builder_instantiation)
+        .collect();
 
-       #(#row_appenders)*
-    };
+    let builder_append: Vec<&TokenStream> =
+        fields.iter().map(|field| &field.builder_append).collect();
 
-    gen_function
+    let builder_finish: Vec<&TokenStream> =
+        fields.iter().map(|field| &field.builder_finish).collect();
+
+    quote!(
+        #[allow(non_camel_case_types)]
+        pub struct #type_underscore_name<'a> {
+            _arrow_fields: Vec<&'a Field>,
+            #(#builder_field_definitions)*
+            message_struct: Option<arrow_array::builder::StructBuilder>,
+            _phantom: std::marker::PhantomData<&'a ()>,
+        }
+
+        impl<'a> #type_underscore_name<'a> {
+
+            pub fn deserialize(ser_msg : &[u8]) -> r2r::Result<#type_name> {
+                log::trace!("Deserializing bytes to {} in {}", #type_name_str, #type_underscore_name_str);
+                #type_name::from_serialized_bytes(ser_msg)
+            }
+
+            pub fn new(_arrow_fields: Vec<&'a Field>) -> Self {
+                log::debug!("Instantiating parser for {}: {}::new", #type_name_str, #type_underscore_name_str);
+                #[allow(unused_mut)]
+                let mut this = Self {
+                    _arrow_fields,
+                    message_struct: None,
+                    #(#builder_field_init)*
+                    _phantom: std::marker::PhantomData,
+                };
+
+                #[allow(unused)]
+                for field in &this._arrow_fields {
+                    match field.name().as_str() {
+                        #(#builder_instantiation)*
+                        "message_struct" => {
+                            this.message_struct = Some(arrow_array::builder::StructBuilder::from_fields(#struct_schema_fn_ident(false), 0))
+                        },
+                        other => log::error!("Invalid field name: {}", other)
+                    }
+                }
+                this
+            }
+
+        }
+
+        impl<'a> #rowbuilder_trait<'a, #type_name> for #type_underscore_name<'a> {
+
+
+            fn add_row(&mut self, msg : &#type_name) -> Result<()> {
+                #[allow(unused)]
+                for field in &self._arrow_fields {
+                    match field.name().as_str() {
+                        #(#builder_append),*
+                        "message_struct" => #regular_struct_builder_fn_ident(&msg, &mut self.message_struct.as_mut().unwrap()),
+                        other => log::error!("Invalid field name: {}", other)
+                    }
+                }
+                Ok(())
+            }
+
+            fn add_raw_row(&mut self, msg : &[u8]) -> Result<()> {
+                log::debug!("Adding row in {}", #type_underscore_name_str);
+                #[allow(unused)]
+                let msg = Self::deserialize(msg)?;
+                self.add_row(&msg)?;
+                Ok(())
+            }
+
+            fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>> {
+                log::debug!("Building batch in {}", #type_underscore_name_str);
+                #[allow(unused_mut)]
+                let mut res : Vec<Arc<dyn Array>> = vec![];
+
+                #[allow(unused)]
+                for field in &self._arrow_fields {
+                    match field.name().as_str() {
+                        #(#builder_finish)*
+                        "message_struct" => res.push(Arc::new(self.message_struct.as_mut().unwrap().finish())),
+                        other => log::error!("Invalid field name: {}", other)
+                    }
+                }
+                res
+                }
+            }
+
+            #[allow(non_snake_case,unused)]
+            pub fn #struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
+                #(#struct_builder_appends)*
+                builder.append(true);
+            }
+    )
 }
 
 #[cfg(feature = "doc-only")]
@@ -1582,7 +1382,7 @@ fn main() -> Result<()> {
     generate_schema(
         out_dir_path,
         &structs_by_schema,
-    // &structs_by_type,
+        // &structs_by_type,
         &mut log_file,
     )?;
 
@@ -1600,8 +1400,7 @@ fn generate_arrow_mappers(
     let arrow_imports = generate_arrow_imports();
     let flat_arrow_schema_gen = generate_flat_arrow_schema(&structs_by_schema, &structs_by_type);
     let arrow_schema_gen = generate_arrow_schema(&structs_by_schema, &structs_by_type);
-    let typesafe_parsers =
-    generate_arrow_rowbuilders(&structs_by_schema, &structs_by_type);
+    let typesafe_parsers = generate_arrow_rowbuilders(&structs_by_schema, &structs_by_type);
     writeln!(log_file, "Writing to {:?}", output_path.clone())
         .expect("Failed to write to log file");
 
