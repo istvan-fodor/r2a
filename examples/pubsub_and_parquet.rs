@@ -98,11 +98,15 @@ async fn subscriber(arc_node: Arc<Mutex<r2r::Node>>) -> Result<()> {
             let file_path = format!("target/laser_scan_{}.parquet", count / 10);
             write_to_parquet(arrays, Arc::new(schema), &file_path).unwrap();
 
+            println!("Wrote data to parquet file {}", file_path);
+
             let arrays = flat_row_builder.to_arc_arrays();
 
             let schema = Schema::new(flat_fields.clone());
             let file_path = format!("target/laser_scan_flat_{}.parquet", count / 10);
             write_to_parquet(arrays, Arc::new(schema), &file_path).unwrap();
+
+            println!("Wrote flat data to parquet file {}", file_path);
         }
 
         futures::future::ready(())
