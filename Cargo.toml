@@ -1,6 +1,6 @@
 [package]
 name = "r2a"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "A Rust library that provides a typesafe way to convert ROS 2 messages into Apache Arrow format"
 homepage = "https://github.com/istvan-fodor/r2a"
