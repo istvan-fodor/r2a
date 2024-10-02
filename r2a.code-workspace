@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"[rust]": {
+			"editor.defaultFormatter": "rust-lang.rust-analyzer",
+			"editor.formatOnSave": true
+		},
+		"rust-analyzer.runnables.extraEnv": {
+			"ROS_DISTRO": "humble",
+			"DYLD_FALLBACK_LIBRARY_PATH": "${env:AMENT_PREFIX_PATH}/lib"
+		},
+		"rust-analyzer.cargo.extraEnv": {
+			"ROS_DISTRO": "humble",
+			"DYLD_FALLBACK_LIBRARY_PATH": "${env:AMENT_PREFIX_PATH}/lib"
+		},
+		"rust-analyzer.runnables.command": "./rust-analyzer-vscode-run-cmd.sh",
+		"rust-analyzer.linkedProjects": [
+			"./Cargo.toml",
+		],
+		"rust-analyzer.check.overrideCommand": [
+			"./rust-analyzer-cargo-check.sh"
+		],
+		"rust-analyzer.cargo.buildScripts.overrideCommand": [
+			"./rust-analyzer-cargo-check.sh"
+		]
+	}
+}

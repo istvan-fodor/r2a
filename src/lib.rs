@@ -34,7 +34,7 @@
 //! use r2a::ArrowSupport;
 //! use r2a::RowBuilder;
 //!
-//! let fields = r2r::std_msgs::msg::Header::arrow_fields();
+//! let fields = r2r::std_msgs::msg::Header::arrow_fields(false);
 //! let mut row_builder = r2r::std_msgs::msg::Header::new_row_builder(fields.iter().collect()); //We keep all the fields, convert to Vec<&Field>
 //!
 //! let my_message = r2r::std_msgs::msg::Header {
