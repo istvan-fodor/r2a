@@ -14,6 +14,10 @@ The crate can be found on crates.io: https://crates.io/crates/r2a
 1. `cargo add r2a`
 2. Make sure to source your ROS 2 environment before you build your project. 
 
+## Development
+
+If you use Visual Studio Code, the `r2a.code-workspace` will be useful. If you are using a Mac, the Code workspace assumes that you have [Robostack](https://robostack.github.io/GettingStarted.html) installed and your env is called `ros_env`. 
+
 ## Examples
 
 ```rust
