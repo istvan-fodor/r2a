@@ -25,16 +25,16 @@
 //!
 //! ## Features
 //! - Convert ROS schema to Arrow fields.
-//! - Support for flat Arrow fields mapping.
-//! - A row builder for dynamic schema handling.
-//! - A comprehensive list of supported ROS message schemas.
+//! - Support for 1-1 match and flat Arrow fields mapping. 1-1 match follows the exact structure of the original ROS message, while flat is a "more tabular" format.
+//! - A row builder for storing converted rows.
+//! - All ROS message schemas are supported as long as they are properly sourced.
 //!
 //! ## Example
 //! ```rust
 //! use r2a::ArrowSupport;
 //! use r2a::RowBuilder;
 //!
-//! let fields = r2r::std_msgs::msg::Header::arrow_fields(false);
+//! let fields = r2r::std_msgs::msg::Header::arrow_fields(true); // If parameter is true, we also store an extra column called `message struct` that will include the complete message as a struct.
 //! let mut row_builder = r2r::std_msgs::msg::Header::new_row_builder(fields.iter().collect()); //We keep all the fields, convert to Vec<&Field>
 //!
 //! let my_message = r2r::std_msgs::msg::Header {
@@ -46,7 +46,24 @@
 //!            };
 //! row_builder.add_row(&my_message).unwrap();
 //! let arrow_arrays = row_builder.to_arc_arrays();
+//! //store to parquet, etc.
 //! ```
+//!
+//! When we create fields with `arrow_fields` and the RowBuilder `new_row_builder`, the message will keep it's original structure. For example a `sensor_msgs/msg/LaserScan` message will be converted to Arrow like this:
+//!
+//! | header                                                        |   angle_min |   angle_max |   angle_increment |   time_increment |   scan_time |   range_min |   range_max | ranges           | intensities           | message_struct                                                                                       |
+//! |:--------------------------------------------------------------|------------:|------------:|------------------:|-----------------:|------------:|------------:|------------:|:-----------------|:----------------------|:-----------------------------------------------------------------------------------------------------|
+//! | {'stamp': {'sec': 0, 'nanosec': 0}, 'frame_id': 'test_frame'} |       -1.57 |        1.57 |              0.01 |            0.001 |        0.05 |         0.2 |          10 | [1. 2. 3. 4. 5.] | [0.5 0.7 0.9 1.1 1.3] | {'header': {'stamp': {'sec': 22, 'nanosec': 0}, 'frame_id': 'test_frame'}, 'angle_min': -1.570, ...} |
+//! | {'stamp': {'sec': 1, 'nanosec': 0}, 'frame_id': 'test_frame'} |       -1.57 |        1.57 |              0.01 |            0.001 |        0.05 |         0.2 |          10 | [1. 2. 3. 4. 5.] | [0.5 0.7 0.9 1.1 1.3] | {'header': {'stamp': {'sec': 28, 'nanosec': 0}, 'frame_id': 'test_frame'}, 'angle_min': -1.570, ...} |
+//!
+//!
+//! We can contrast that with `flat_arrow_fields` and `new_flat_row_builder`, there the same type of message will be converted like this:
+//!
+//! |   header_stamp_sec|   header_stamp_nanosec | header_frame_id   |   angle_min |   angle_max |   angle_increment |   time_increment |   scan_time |   range_min |   range_max | ranges           | intensities           | message_struct                                                                                      |
+//! |------------------:|-----------------------:|:------------------|------------:|------------:|------------------:|-----------------:|------------:|------------:|------------:|:-----------------|:----------------------|:----------------------------------------------------------------------------------------------------|
+//! |                 0 |                      0 | test_frame        |       -1.57 |        1.57 |              0.01 |            0.001 |        0.05 |         0.2 |          10 | [1. 2. 3. 4. 5.] | [0.5 0.7 0.9 1.1 1.3] | {'header': {'stamp': {'sec': 25, 'nanosec': 0}, 'frame_id': 'test_frame'}, 'angle_min': -1.570, ...}|
+//! |                 1 |                      0 | test_frame        |       -1.57 |        1.57 |              0.01 |            0.001 |        0.05 |         0.2 |          10 | [1. 2. 3. 4. 5.] | [0.5 0.7 0.9 1.1 1.3] | {'header': {'stamp': {'sec': 23, 'nanosec': 0}, 'frame_id': 'test_frame'}, 'angle_min': -1.570, ...}|
+//!
 //!
 
 mod ros_mapper;

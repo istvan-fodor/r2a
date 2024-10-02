@@ -666,7 +666,7 @@ fn rust_field_to_arrow_type_safe_token_stream(
 fn primitive_vector_builder_components(
     typ: &str,
     path_field_name: &syn::Expr,
-    flat: bool,
+    _flat: bool,
     builder_field_name: &Ident,
     index: &mut usize,
 ) -> (TokenStream, TokenStream, TokenStream, TokenStream) {
