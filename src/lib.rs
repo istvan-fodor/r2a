@@ -49,6 +49,8 @@
 //! //store to parquet, etc.
 //! ```
 //!
+//! For more elaborate examples, see the [examples in the Git repo](https://github.com/istvan-fodor/r2a/tree/main/examples).
+//!
 //! When we create fields with `arrow_fields` and the RowBuilder `new_row_builder`, the message will keep it's original structure. For example a `sensor_msgs/msg/LaserScan` message will be converted to Arrow like this:
 //!
 //! | header                                                        |   angle_min |   angle_max |   angle_increment |   time_increment |   scan_time |   range_min |   range_max | ranges           | intensities           | message_struct                                                                                       |
