@@ -90,18 +90,14 @@ pub trait RowBuilder<'a, T> {
 /// let arrow_fields = r2r::std_msgs::msg::Header::arrow_fields(false);
 /// let schema = r2r::std_msgs::msg::Header::arrow_schema(false);
 /// let row_builder = r2r::std_msgs::msg::Header::new_row_builder(arrow_fields.iter().collect());
-///
-///
-/// // Only want to store the records in a struct column
-///
-///
-///
-///
 /// ```
 pub trait ArrowSupport<'a> {
     /// The type of row builder that this ROS 2 message type will use to accumulate rows.
     /// This type is specific to the ROS 2 message type that implements the `ArrowSupport` trait.
     type RowBuilderType;
+
+    /// The type of row builder that this ROS 2 message type will use to accumulate rows. The FlatRowBuilder will try to flatten out ROS messages as much as possible.
+    /// This type is specific to the ROS 2 message type that implements the `ArrowSupport` trait.
     type FlatRowBuilderType;
 
     /// This method returns the name of the ROS 2 message type as a string, which can be used
@@ -268,6 +264,54 @@ mod tests {
                     && fields.get(0).unwrap().data_type() == &arrow_schema::DataType::Int32
                     && fields.get(1).unwrap().name() == "nanosec"
                     && fields.get(1).unwrap().data_type() == &arrow_schema::DataType::UInt32
+            }
+            _ => false,
+        };
+        assert!(is_correct_struct);
+    }
+
+    #[test]
+    fn test_append_and_to_array_flat() {
+        let mut v = Vec::with_capacity(100);
+        for _ in 0..100 {
+            v.push(Header {
+                stamp: Time { sec: 0, nanosec: 0 },
+                frame_id: "test_frame".to_string(),
+            });
+        }
+
+        let fields = Header::flat_arrow_fields(true);
+
+        let fields = fields
+            .iter()
+            .filter(|f| f.name() == "stamp_sec" || f.name() == "message_struct")
+            .collect();
+
+        let mut row_builder = Header::new_flat_row_builder(fields);
+        for msg in v.iter() {
+            assert!(row_builder.add_row(msg).is_ok());
+        }
+
+        let arrays = row_builder.to_arc_arrays();
+        assert_eq!(arrays.len(), 2);
+        assert_eq!(arrays[0].len(), 100);
+        assert_eq!(arrays[0].null_count(), 0);
+
+        assert!(arrays[0].data_type() == &arrow_schema::DataType::Int32);
+
+        let is_correct_struct = match arrays[1].data_type() {
+            arrow_schema::DataType::Struct(fields) => {
+                assert!(fields.get(0).unwrap().name() == "stamp");
+                match fields.get(0).unwrap().data_type() {
+                    arrow_schema::DataType::Struct(fields) => {
+                        fields.len() == 2
+                            && fields.get(0).unwrap().name() == "sec"
+                            && fields.get(0).unwrap().data_type() == &arrow_schema::DataType::Int32
+                            && fields.get(1).unwrap().name() == "nanosec"
+                            && fields.get(1).unwrap().data_type() == &arrow_schema::DataType::UInt32
+                    }
+                    _ => false,
+                }
             }
             _ => false,
         };
