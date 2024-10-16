@@ -45,3 +45,8 @@ let arrow_arrays = row_builder.to_arc_arrays();
 ```
 
 For more elaborate examples see the [examples](examples) folder.
+
+## Changelog
+
+#### [0.1.7] - 2024-10-13
+* Added Jazzy support (switched to [r2r 0.9.2](https://github.com/sequenceplanner/r2r) 
