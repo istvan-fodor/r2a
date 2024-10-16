@@ -1,3 +1,8 @@
+[![R2A CI](https://github.com/istvan-fodor/r2a/actions/workflows/build.yml/badge.svg)](https://github.com/istvan-fodor/r2a/actions/workflows/build.yml)
+[![Crate](https://img.shields.io/crates/v/r2a.svg)](https://crates.io/crates/r2a)
+
+
+
 R2A - A Rust library that provides a typesafe way to convert ROS 2 messages into Apache Arrow format
 =================================================================================================
 
