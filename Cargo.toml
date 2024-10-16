@@ -17,7 +17,7 @@ default = ["r2r", "r2r_common"]
 [dependencies]
 arrow-schema = ">=50"
 arrow-array = ">=50"
-r2r = { version = "0.9.2", optional = true }
+r2r = { version = ">=0.9.2", optional = true }
 anyhow = ">=1"
 log = ">=0.4"
 
