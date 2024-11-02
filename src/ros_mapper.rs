@@ -2,6 +2,7 @@ use anyhow::Result;
 use arrow_array::builder::ArrayBuilder;
 use arrow_array::Array;
 use std::sync::Arc;
+use log::{error, debug};
 
 /// The `RowBuilder` trait is implemented for each ROS 2 message type by a code generator.
 /// It serves as an accumulator that collects records and converts them into a collection
@@ -48,6 +49,61 @@ pub trait RowBuilder<'a, T> {
     /// fails for any reason.
     fn add_row(&mut self, msg: &T) -> Result<()>;
 
+    /// Deserializes then adds raw binary data (usually in the form of a serialized message) to the row builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - A byte slice representing the raw serialized message data.
+    ///
+    /// # Errors
+    ///
+    /// This method returns a `Result` that can indicate an error if the raw data cannot be
+    /// processed or added correctly.
+    fn add_raw_row(&mut self, msg: &[u8]) -> Result<()>;
+
+    /// Converts the accumulated rows into a vector of Arrow arrays and resets the internal state
+    /// of the builder.
+    ///
+    /// This method returns the data collected by the row builder as a collection of Arrow arrays,
+    /// which can be used for further processing or storage in formats like Parquet.
+    ///
+    /// # Returns
+    ///
+    /// A vector of Arrow arrays, where each array represents a column of data from the accumulated
+    /// rows.
+    fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>>;
+}
+
+/// The `RowBuilder` trait is implemented for each ROS 2 message type by a code generator.
+/// It serves as an accumulator that collects records and converts them into a collection
+/// of Arrow arrays. This trait is responsible for managing how records are added and stored
+/// and how they are converted into Arrow-compatible data structures.
+///
+/// # Type Parameters
+///
+/// - `'a`: The lifetime of the references to the message and fields.
+/// - `T`: The specific ROS 2 message type that the row builder will accumulate.
+///
+/// # Example
+///
+/// ```
+/// use r2a::ArrowSupport;
+/// use r2a::RowBuilder;
+///
+/// let fields = r2r::std_msgs::msg::Header::arrow_fields(false);
+/// let mut row_builder = r2r::std_msgs::msg::Header::new_row_builder(fields.iter().collect()); //We keep all the fields, convert to Vec<&Field>
+///
+/// let my_message = r2r::std_msgs::msg::Header {
+///                stamp: r2r::builtin_interfaces::msg::Time {
+///                    sec: 0,
+///                    nanosec: 0,
+///                },
+///                frame_id: "test_frame".to_string(),
+///            };
+/// row_builder.add_row(&my_message).unwrap();
+/// let arrow_arrays = row_builder.to_arc_arrays();
+/// ```
+pub trait UntypedRowBuilder<'a> {
     /// Deserializes then adds raw binary data (usually in the form of a serialized message) to the row builder.
     ///
     /// # Arguments
@@ -222,6 +278,59 @@ pub trait ArrowSupport<'a> {
     /// message type plus the optional `message_struct` field.
     fn flat_arrow_schema(include_msg_struct: bool) -> arrow_schema::Schema;
 }
+
+
+
+
+pub struct RawMessageRowBuilder<'a> {
+    _arrow_fields: Vec<&'a Field>,
+    binary_data: Option<arrow_array::builder::LargeBinaryBuilder>,
+}
+
+impl<'a> RawMessageRowBuilder<'a> {
+    pub fn new(_arrow_fields: Vec<&'a Field>) -> Self {
+        debug!(
+            "Building binary data row builder for fields {:?}",
+            &_arrow_fields
+        );
+        let mut this = RawMessageRowBuilder {
+            _arrow_fields,
+            binary_data: None,
+        };
+
+        for field in &this._arrow_fields {
+            match field.name().as_str() {
+                "binary_data" => this.binary_data = Some(arrow_array::builder::LargeBinaryBuilder::new()),
+                x => error!("Invalid column: {}", x),
+            }
+        }
+        this
+    }
+}
+
+impl<'a> UntypedRowBuilder<'a> for RawMessageRowBuilder<'a> {
+
+    fn add_raw_row(&mut self, msg: &[u8]) -> Result<()> {
+        for field in self._arrow_fields.iter() {
+            match field.name().as_str() {
+                "binary_data" => self.binary_data.as_mut().unwrap().append_value(msg),
+                x => error!("Invalid field: {}", x),
+            }
+        }
+        Ok(())
+    }
+    fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>> {
+        let mut res: Vec<Arc<dyn Array>> = vec![];
+        for field in &self._arrow_fields {
+            match field.name().as_str() {
+                "binary_data" => res.push(Arc::new(self.binary_data.as_mut().unwrap().finish())),
+                x => error!("Invalid field: {}", x),
+            }
+        }
+        res
+    }
+}
+
 
 #[cfg(feature = "default")]
 include!(concat!(env!("OUT_DIR"), "/generated_arrow_mappers.rs"));

@@ -40,6 +40,7 @@ struct StructVisitor<'a> {
     structs_by_type: &'a mut BTreeMap<String, ROSStruct>,
     module_stack: Vec<String>,
     valid_structs: &'a HashSet<String>,
+    file_name: String,
 }
 
 impl<'a> StructVisitor<'a> {
@@ -53,20 +54,44 @@ struct ROSStruct {
     packaged_name: String,
     schema_name: String,
     fields: Vec<ROSField>,
+    file_name: String,
 }
 
 impl ROSStruct {
-    pub fn new(packaged_name: String, schema_name: String) -> Self {
+    pub fn new(file_name: String, packaged_name: String, schema_name: String) -> Self {
         ROSStruct {
             packaged_name,
             schema_name,
             fields: Vec::new(),
+            file_name: file_name,
         }
     }
 
     pub fn add_field(&mut self, field: ROSField) {
         self.fields.push(field);
     }
+
+    pub fn to_type_underscore_name(&self) -> String {
+        Self::to_type_underscore_name_static(self.packaged_name.as_str())
+    }
+
+    pub fn to_type_underscore_name_static(name: &str) -> String {
+        name.replace("::", "_").replace('/', "_").replace("r2r_", "")
+    }
+    
+    pub fn create_name_identity(&self, suffix: &str) -> Ident {
+        Self::create_name_identity_static(self.packaged_name.as_str(), suffix)
+    }
+
+    pub fn create_name_identity_static(name: &str, suffix: &str) -> Ident {
+        Ident::new(
+            format!("{}{}", Self::to_type_underscore_name_static(name), suffix).as_str(),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+
+    
 }
 
 #[derive(Debug, Clone)]
@@ -140,7 +165,7 @@ impl<'a> Visit<'a> for StructVisitor<'a> {
         if self.valid_structs.contains(&package_name) {
             let schema_name = self.schema_name_format.replace("{}", &i.ident.to_string());
 
-            let mut my_struct = ROSStruct::new(package_name.clone(), schema_name.clone());
+            let mut my_struct = ROSStruct::new(self.file_name.clone(), package_name.clone(), schema_name.clone());
 
             for field in &i.fields {
                 let field_type = type_to_string(&field.ty);
@@ -158,17 +183,17 @@ impl<'a> Visit<'a> for StructVisitor<'a> {
     }
 }
 
-fn create_name(original_name: &str, suffix: &str) -> String {
-    let name = format!("{}{}", original_name, suffix);
-    name.replace("::", "_").replace('/', "_")
-}
+// fn create_name(original_name: &str, suffix: &str) -> String {
+//     let name = format!("{}{}", original_name, suffix);
+//     name.replace("::", "_").replace('/', "_")
+// }
 
-fn create_name_identity(original_name: &str, suffix: &str) -> Ident {
-    Ident::new(
-        create_name(original_name, suffix).as_str(),
-        proc_macro2::Span::call_site(),
-    )
-}
+// fn create_name_identity(original_name: &str, suffix: &str) -> Ident {
+//     Ident::new(
+//         create_name(original_name, suffix).as_str(),
+//         proc_macro2::Span::call_site(),
+//     )
+// }
 
 fn is_desired_trait(path: &syn::Path, trait_name: &str) -> bool {
     path.segments
@@ -360,7 +385,7 @@ fn generate_arrow_schema_fields(
                 let typ = format!("r2r::{}", typ);
                 let field_struct = structs_by_type.get(&typ).unwrap();
 
-                let schema_fn = create_name_identity(&field_struct.packaged_name, "_Schema");
+                let schema_fn = field_struct.create_name_identity("_Schema");
 
                 let nullable = true;
                 vec![quote!(
@@ -389,7 +414,7 @@ fn generate_arrow_schema_fields(
 
                 let suffix = if flat { "_FlatSchema" } else { "_Schema" };
 
-                let schema_fn = create_name_identity(&field_struct.packaged_name, suffix);
+                let schema_fn = field_struct.create_name_identity(suffix);
 
                 let nullable = true;
 
@@ -417,9 +442,8 @@ fn generate_flat_arrow_schema(
         .values()
         .map(|ros_struct| {
             let schema_name = &ros_struct.schema_name;
-            let type_underscore_name_schema = create_name_identity(&ros_struct.packaged_name, "_FlatSchema");
-            let type_underscore_name_schema_struct = create_name_identity(&ros_struct.packaged_name, "_Schema");
-
+            let type_underscore_name_schema = ros_struct.create_name_identity("_FlatSchema");
+            let type_underscore_name_schema_struct = ros_struct.create_name_identity( "_Schema");
             let fields = generate_arrow_schema_fields(
                 schema_name,
                 structs_by_schema,
@@ -451,7 +475,7 @@ fn generate_flat_arrow_schema(
     let gen_function = quote! {
 
         #[allow(dead_code)]
-        pub(crate) fn map_ros_schema_to_flat_arrow_fields(ros_schema : &str, include_self_struct: bool) -> Vec<Field> {
+        pub fn map_ros_schema_to_flat_arrow_fields(ros_schema : &str, include_self_struct: bool) -> Vec<Field> {
             match ros_schema {
                 #(#schema_fn_call)*
                 unknown => {
@@ -476,8 +500,7 @@ fn generate_arrow_schema(
         .values()
         .map(|ros_struct| {
             let schema_name = &ros_struct.schema_name;
-            let type_underscore_name_schema =
-                create_name_identity(&ros_struct.packaged_name, "_Schema");
+            let type_underscore_name_schema = ros_struct.create_name_identity("_Schema");
 
             let fields = generate_arrow_schema_fields(
                 schema_name,
@@ -510,7 +533,7 @@ fn generate_arrow_schema(
     let gen_function = quote! {
 
         #[allow(dead_code)]
-        pub(crate) fn map_ros_schema_to_arrow_fields(ros_schema : &str, include_self_struct: bool) -> Vec<Field> {
+        pub fn map_ros_schema_to_arrow_fields(ros_schema : &str, include_self_struct: bool) -> Vec<Field> {
             match ros_schema {
                 #(#schema_fn_call)*
                 unknown => {
@@ -542,7 +565,7 @@ fn rust_field_to_arrow_type_safe_token_stream(
     flat: bool,
     index: &mut usize,
 ) -> ArrowSchemaField {
-    let builder_field_name = create_name_identity(field_name, "");
+    let builder_field_name = ROSStruct::create_name_identity_static(field_name, "");
     let path_field_name = parse_str::<syn::Expr>(field_path).unwrap();
 
     let (schema_suffix, struct_builder_suffix) = if flat {
@@ -555,9 +578,9 @@ fn rust_field_to_arrow_type_safe_token_stream(
         match field_type {
             FieldType::Struct(underlying_type_name_str) => {
                 let type_schema_fn_ident =
-                    create_name_identity(underlying_type_name_str.as_str(), schema_suffix);
+                    ROSStruct::create_name_identity_static(underlying_type_name_str.as_str(), schema_suffix);
                 let type_struct_builder_fn_ident =
-                    create_name_identity(underlying_type_name_str.as_str(), struct_builder_suffix);
+                    ROSStruct::create_name_identity_static(underlying_type_name_str.as_str(), struct_builder_suffix);
 
                 let builder_type = quote!(arrow_array::builder::StructBuilder);
                 let builder_instantiation = quote!(arrow_array::builder::StructBuilder::from_fields(#type_schema_fn_ident(false), 0));
@@ -583,8 +606,8 @@ fn rust_field_to_arrow_type_safe_token_stream(
             }
             FieldType::StructArray(object_array_underscore_name) => {
                 let type_schema_fn_ident =
-                    create_name_identity(object_array_underscore_name.as_str(), schema_suffix);
-                let type_struct_builder_fn_ident = create_name_identity(
+                    ROSStruct::create_name_identity_static(object_array_underscore_name.as_str(), schema_suffix);
+                let type_struct_builder_fn_ident = ROSStruct::create_name_identity_static(
                     object_array_underscore_name.as_str(),
                     struct_builder_suffix,
                 );
@@ -1009,9 +1032,9 @@ fn generate_arrow_schema_typesafe_parser_components(
                 let typ = format!("r2r::{}", typ);
                 let field_struct = structs_by_type.get(&typ).unwrap();
 
-                let type_underscore_name_str =
-                    field_struct.packaged_name.replace("::", "_").to_string();
-
+                let mut type_underscore_name_str = field_struct.packaged_name.clone().replace("::", "_");
+                type_underscore_name_str.replace_range(0..4, "");
+                    
                 vec![rust_field_to_arrow_type_safe_token_stream(
                     &field_name,
                     &dotted_path,
@@ -1054,9 +1077,14 @@ fn generate_arrow_rowbuilders(
             let schema_name = &ros_struct.schema_name;
             let type_name_str = &ros_struct.packaged_name;
             let type_name: syn::Path = parse_str::<syn::Path>(type_name_str).unwrap();
-            let rowbuilder_trait = create_name_identity("RowBuilder", "");
+            let rowbuilder_trait = ROSStruct::create_name_identity_static("RowBuilder", "");
+            let untyped_rowbuilder_trait = ROSStruct::create_name_identity_static("UntypedRowBuilder", "");
             let type_underscore_name_str = create_name(&ros_struct.packaged_name, "_RowBuilder");
             let type_underscore_name = create_name_identity(&type_underscore_name_str, "");
+
+            let untyped_type_underscore_name_str = create_name(&ros_struct.packaged_name, "_UntypedRowBuilder");
+            let untyped_type_underscore_name = create_name_identity(&untyped_type_underscore_name_str, "");
+
             let struct_builder_fn_ident =
                 create_name_identity(&ros_struct.packaged_name, "_StructBuilder");
             let struct_schema_fn_ident = create_name_identity(&ros_struct.packaged_name, "_Schema");
@@ -1072,7 +1100,8 @@ fn generate_arrow_rowbuilders(
                 create_name_identity(&ros_struct.packaged_name, "_FlatSchema");
 
             let instantion = quote!(
-                #schema_name => Box::new(#type_underscore_name::new(fields)),
+                #schema_name => Box::new(#untyped_type_underscore_name::new(fields, flat)),
+                
             );
 
             let rowbuilder_tokens = generate_rowbuilder_tokens(
@@ -1103,6 +1132,10 @@ fn generate_arrow_rowbuilders(
                 &struct_schema_fn_ident,
                 &struct_builder_fn_flat_ident,
                 &struct_builder_fn_ident,
+            );
+
+            let untyped_rowbuilder_tokens = generate_untyped_rowbuilder_tokens(
+                &untyped_type_underscore_name, &type_underscore_name, &type_underscore_name_flat, &type_name, &untyped_rowbuilder_trait
             );
 
             let arrow_support = quote! (
@@ -1146,41 +1179,36 @@ fn generate_arrow_rowbuilders(
 
                     #arrow_support
 
-                    // #[allow(non_snake_case,unused)]
-                    // pub fn #flat_struct_builder_fn_ident(msg : &#type_name, builder: &mut arrow_array::builder::StructBuilder) {
-                    //     #(#flat_struct_builder_appends)*
-                    //     builder.append(true);
-                    // }
-
                     #rowbuilder_tokens
 
                     #flat_rowbuilder_tokens
+
+                    #untyped_rowbuilder_tokens
 
                 ),
             )
         })
         .collect();
 
-    let (_, row_appenders): (Vec<TokenStream>, Vec<TokenStream>) =
+    let (instantiations, row_appenders): (Vec<TokenStream>, Vec<TokenStream>) =
         instantiation_and_row_appender.into_iter().unzip();
+        
+    let row_builders = quote! {
 
-    let gen_function = quote! {
-
-        // pub(crate) fn new_row_builder_for_schema<'a>(ros_schema : &str, fields: Vec<&'a Field>) -> Box<dyn RowBuilder<'a, T> + 'a> {
-        //     match ros_schema {
-        //         #(#instantiations)*
-        //         unsupported_schema => {
-        //             log::warn!("Unsupported schema: {}", unsupported_schema);
-        //             panic!("Unsupported schema: {}", unsupported_schema);
-        //             //Box::new(RawMessageRowBuilder::new(fields))
-        //         },
-        //     }
-        // }
+        pub fn new_row_builder_for_schema<'a>(ros_schema : &str, flat: bool, fields: Vec<&'a Field>) -> Box<dyn UntypedRowBuilder<'a> + 'a> {
+            match ros_schema {
+                #(#instantiations)*
+                unsupported_schema => {
+                    log::warn!("Unsupported schema: {}", unsupported_schema);
+                    Box::new(RawMessageRowBuilder::new(fields))
+                },
+            }
+        }
 
        #(#row_appenders)*
     };
 
-    gen_function
+    row_builders
 }
 
 fn generate_rowbuilder_tokens(
@@ -1197,6 +1225,8 @@ fn generate_rowbuilder_tokens(
     struct_builder_fn_ident: &Ident,
     regular_struct_builder_fn_ident: &Ident,
 ) -> TokenStream {
+
+    let type_underscore_name_str = type_underscore_name.to_string();
     let fields = generate_arrow_schema_typesafe_parser_components(
         schema_name,
         structs_by_schema,
@@ -1345,6 +1375,61 @@ fn generate_rowbuilder_tokens(
     )
 }
 
+fn generate_untyped_rowbuilder_tokens(
+    // flat: bool,
+    // schema_name: &str,
+    untyped_type_underscore_name: &Ident,
+    type_underscore_name: &Ident,
+    type_underscore_name_flat: &Ident,
+    type_name: &syn::Path,
+    // type_name_str: &String,
+    // type_underscore_name_str: &str,
+    rowbuilder_trait: &Ident,
+    
+    // struct_schema_fn_ident: &Ident,
+    // struct_builder_fn_ident: &Ident,
+    // regular_struct_builder_fn_ident: &Ident,
+) -> TokenStream {
+    quote!(
+        #[allow(non_camel_case_types)]
+        pub struct #untyped_type_underscore_name<'a> {
+            row_builder: Box<dyn RowBuilder<'a, #type_name> + 'a>,
+        }
+
+        impl<'a> #untyped_type_underscore_name<'a> {
+
+            pub fn deserialize(ser_msg : &[u8]) -> r2r::Result<#type_name> {
+                #type_underscore_name::deserialize(ser_msg)
+            }
+
+            pub fn new(arrow_fields: Vec<&'a Field>, flat: bool) -> Self {
+                let row_builder : Box<dyn RowBuilder<'a, #type_name> + 'a> = match flat {
+                    true => Box::new(#type_underscore_name_flat::new(arrow_fields)),
+                    false =>  Box::new(#type_underscore_name::new(arrow_fields))
+                };
+
+                #untyped_type_underscore_name {
+                    row_builder: row_builder
+                }
+            }
+
+        }
+
+        impl<'a> #rowbuilder_trait<'a> for #untyped_type_underscore_name<'a> {
+
+            fn add_raw_row(&mut self, msg : &[u8]) -> Result<()> {
+                self.row_builder.add_raw_row(&msg)?;
+                Ok(())
+            }
+
+            fn to_arc_arrays(&mut self) -> Vec<Arc<dyn Array>> {
+                self.row_builder.to_arc_arrays()
+            }
+        }
+
+    )
+}
+
 #[cfg(feature = "doc-only")]
 fn main() -> Result<()> {
     Ok(())
@@ -1485,8 +1570,9 @@ fn find_structs_by_schema_and_type(
             schema_name_format,
             structs_by_schema: &mut structs_by_schema,
             structs_by_type: &mut structs_by_type,
-            module_stack: vec!["r2r".to_string(), file_name_no_ext],
+            module_stack: vec!["r2r".to_string(), file_name_no_ext.clone()],
             valid_structs: implementing_structs,
+            file_name: file_name_no_ext
         };
 
         visitor.visit_file(&syntax_tree);

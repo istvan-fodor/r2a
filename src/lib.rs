@@ -74,6 +74,8 @@ mod schema;
 pub use ros_mapper::ArrowSupport;
 pub use ros_mapper::RowBuilder;
 
+pub use ros_mapper::{new_row_builder_for_schema, map_ros_schema_to_arrow_fields, map_ros_schema_to_flat_arrow_fields};
+
 /// Returns an array of supported ROS message schemas. The list is automatically generated in compilation time.
 pub fn get_supported_schemas() -> &'static [&'static str] {
     schema::SUPPORTED_SCHEMAS
